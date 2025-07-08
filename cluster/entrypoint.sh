@@ -3,11 +3,17 @@
 # --- ENTRYPOINT 脚本 ---
 # 这个脚本负责容器启动时的所有初始化工作
 
-# 禁用 Swap。虽然 fstab 已配置，但容器运行时仍需执行此命令确保禁用。
+# 1. 临时禁用 Swap
 swapoff -a
-# 默认 Kubelet 启动时会检查 `cat /proc/swaps` 的输出，只有输出为空时才能正常启动。
-# 然而，经过我的实践，即使执行 `swapoff -a` 禁用了 Swap，容器里执行 `cat /proc/swaps` 依然会有输出。
-# 因此，这里强制挂载一个空文件到 `/proc/swaps` 即可解决此问题
+
+# 2. 永久禁用 Swap (通过注释 /etc/fstab)
+# 注意：在容器环境中，/etc/fstab 通常为空，此步骤可能无实际效果，主要是为了配置的完整性
+sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab
+
+# 3. 解决 /proc/swaps 显示问题 (强制 Kubelet 通过检测)
+# 经过我的实践，即使禁用了 Swap，容器里执行 `cat /proc/swaps` 依然可能显示存在 Swap 分区
+# 由于 Kubelet 启动时会检查 `cat /proc/swaps` 的输出，只有输出为空时才能正常启动
+# 因此，这里强制挂载一个空文件到 `/proc/swaps` 来“欺骗” Kubelet 的检测
 mkdir -p /tmp/fakeproc
 touch /tmp/fakeproc/swaps
 mount --bind /tmp/fakeproc/swaps /proc/swaps
@@ -18,6 +24,9 @@ sysctl --system
 
 # 启动 Containerd (后台运行)
 containerd &
+
+# 启动 chrony 服务（设置系统时钟同步）
+service chrony start
 
 # 启动 SSH 服务
 service ssh start
