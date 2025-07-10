@@ -67,6 +67,46 @@ if [ -n "$K8S_HOSTS" ]; then
     echo -e "$K8S_HOSTS" >> /etc/hosts
 fi
 
+# 检查 NODE_TYPE 环境变量是否存在
+# 如果存在，则根据 NODE_TYPE = master 或 node 来启动不同的服务
+if [ -n "$NODE_TYPE" ]; then
+    if [ "$NODE_TYPE" = "master" ]; then
+        # 创建各个组件的数据目录
+        mkdir -p /var/lib/data/kube-apiserver /var/lib/data/kube-controller-manager /var/lib/data/kube-scheduler
+
+        # kube-apiserver 启动参数模板文件
+        KUBE_APISERVER_SETUP_ARGS_TEMPLATE_FILE="/etc/kubernetes/kube-apiserver-setup-args.template"
+        # # 检查模板文件是否存在
+        # if [ ! -f "${KUBE_APISERVER_SETUP_ARGS_TEMPLATE_FILE}" ]; then
+        #     echo "Error: Etcd arguments template file not found at ${KUBE_APISERVER_SETUP_ARGS_TEMPLATE_FILE}"
+        #     exit 1
+        # fi
+        # 替换模板中的 ##NODE_IP## 占位符
+        GENERATED_KUBE_APISERVER_SETUP_ARGS=$(sed -e "s/##NODE_IP##/${IP}/" "${KUBE_APISERVER_SETUP_ARGS_TEMPLATE_FILE}")
+        # 启动 kube-apiserver
+        /usr/local/bin/kube-apiserver ${GENERATED_KUBE_APISERVER_SETUP_ARGS} &
+
+        # kube-controller-manager 启动参数模板文件
+        KUBE_CONTROLLER_MANAGER_SETUP_ARGS_TEMPLATE_FILE="/etc/kubernetes/kube-controller-manager-setup-args.template"
+        # 替换模板中的 ##NODE_IP## 占位符
+        GENERATED_KUBE_CONTROLLER_MANAGER_SETUP_ARGS=$(sed -e "s/##NODE_IP##/${IP}/" "${KUBE_CONTROLLER_MANAGER_SETUP_ARGS_TEMPLATE_FILE}")
+        # 启动 kube-controller-manager
+        /usr/local/bin/kube-controller-manager ${GENERATED_KUBE_CONTROLLER_MANAGER_SETUP_ARGS} &
+
+        # kube-scheduler 启动参数模板文件
+        KUBE_SCHEDULER_SETUP_ARGS_TEMPLATE_FILE="/etc/kubernetes/kube-scheduler-setup-args.template"
+        # 替换模板中的 ##NODE_IP## 占位符
+        GENERATED_KUBE_SCHEDULER_SETUP_ARGS=$(sed -e "s/##NODE_IP##/${IP}/" "${KUBE_SCHEDULER_SETUP_ARGS_TEMPLATE_FILE}")
+        # 启动 kube-scheduler
+        /usr/local/bin/kube-scheduler ${GENERATED_KUBE_SCHEDULER_SETUP_ARGS} &
+
+        echo "Master 节点服务启动完成"
+    elif [ "$NODE_TYPE" = "node" ]; then
+        # 启动 xxx
+        echo "Node 类型服务启动逻辑待实现"
+    fi
+fi
+
 # 执行 CMD 或 docker run 命令行参数
 # "$@" 代表传递给脚本的所有参数（即 Dockerfile 中的 CMD 或 docker run 命令后面的参数）。
 # exec 会替换当前 shell 进程，确保 CMD 或用户指定的命令成为容器的主进程 (PID 1)，

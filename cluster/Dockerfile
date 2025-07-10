@@ -49,6 +49,9 @@ RUN echo "Asia/Shanghai" > /etc/timezone && \
 # 拷贝集群需要的所有二进制文件
 COPY bin/* /usr/local/bin/
 
+# 拷贝 kubectl 配置文件
+COPY kubectl.kubeconfig /root/.kube/config
+
 # 设置root密码为root，方便调试，请在实际使用中修改或移除！
 RUN echo "root:root" | chpasswd
 # 暴露 SSH 端口
