@@ -46,8 +46,18 @@ RUN echo "net.bridge.bridge-nf-call-iptables = 1" > /etc/sysctl.d/k8s.conf && \
 RUN echo "Asia/Shanghai" > /etc/timezone && \
     dpkg-reconfigure -f noninteractive tzdata
 
-# 拷贝集群需要的所有二进制文件
+# 拷贝二进制文件
 COPY bin/* /usr/local/bin/
+
+# 拷贝 containerd 安装文件
+RUN mkdir -p /opt/cni/bin
+COPY containerd/cni-plugins/* /opt/cni/bin/
+COPY containerd/bin/* containerd/crictl /usr/local/bin/
+COPY containerd/runc.amd64 /usr/local/sbin/runc
+COPY containerd/crictl.yaml /etc/crictl.yaml
+
+# 设置 PATH
+ENV PATH="/opt/cni/bin:$PATH"
 
 # 拷贝 kubectl 配置文件
 COPY kubectl.kubeconfig /root/.kube/config
@@ -58,8 +68,8 @@ RUN echo "root:root" | chpasswd
 EXPOSE 22
 
 # 定义容器的入口点和默认命令
-COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
+COPY entrypoint.sh service.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/service.sh
 # ENTRYPOINT 总是执行 entrypoint.sh 脚本，它是容器启动后第一个且唯一执行的程序
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 # CMD 为 ENTRYPOINT 提供默认参数。这里只提供一个默认的 bash shell，
