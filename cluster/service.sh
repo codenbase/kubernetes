@@ -9,14 +9,25 @@ if [ -n "$SERVICE_LOADED" ]; then
 fi
 SERVICE_LOADED=1
 
+# 定义颜色
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
 # 打印信息日志
 log:info() {
-    echo "[INFO] $1"
+    echo -e "${YELLOW}[INFO] $1${NC}"  
+}
+
+# 打印成功日志
+log:success() {
+    echo -e "${GREEN}[SUCCESS] $1${NC}"
 }
 
 # 打印错误日志
 log:error() {
-    echo "[ERROR] $1"
+    echo -e "${RED}[ERROR] $1${NC}"
 }
 
 # 获取容器 主机名 和 IP
@@ -71,18 +82,17 @@ start:etcd() {
     sleep 5
 }
 
-start:master() {
-    # 检查 NODE_TYPE 环境变量是否存在，仅启动 NODE_TYPE = master 的服务
-    if [ -n "$NODE_TYPE" ] && [ "$NODE_TYPE" = "master" ]; then
-        start:kube-apiserver
-        start:kube-controller-manager
-        start:kube-scheduler
-        log:info "Master 节点服务启动完成"
+start:containerd() {
+    CONTAINERD_CONFIG_FILE="/etc/kubernetes/containerd/config.toml"
+    # 检查配置文件是否存在
+    if [ ! -f "${CONTAINERD_CONFIG_FILE}" ]; then
+        log:error "containerd config file not found at ${CONTAINERD_CONFIG_FILE}"
+        exit 1
     fi
-}
-
-start:worker() {
-    start:containerd
+    # 启动 containerd 服务
+    containerd --config ${CONTAINERD_CONFIG_FILE} &
+    # 简短的等待，确保 Containerd 有时间启动（可选，但对于依赖 Containerd 的服务很有用）
+    sleep 3
 }
 
 start:kube-apiserver() {
@@ -127,13 +137,26 @@ start:kube-scheduler() {
     kube-scheduler ${GENERATED_KUBE_SCHEDULER_SETUP_ARGS} &
 }
 
-start:containerd() {
-    CONTAINERD_CONFIG_FILE="/etc/kubernetes/containerd/config.toml"
+start:kubelet() {
+    KUBELET_CONFIG_TEMPLATE_FILE="/etc/kubernetes/kubelet/kubelet-config.yaml.template"
     # 检查配置文件是否存在
-    if [ ! -f "${CONTAINERD_CONFIG_FILE}" ]; then
-        log:error "containerd config file not found at ${CONTAINERD_CONFIG_FILE}"
+    if [ ! -f "${KUBELET_CONFIG_TEMPLATE_FILE}" ]; then
+        log:error "kubelet config template file not found at ${KUBELET_CONFIG_TEMPLATE_FILE}"
         exit 1
     fi
-    # 启动 containerd 服务
-    containerd --config ${CONTAINERD_CONFIG_FILE} &
+    # 替换模板中的 ##NODE_IP## 占位符
+    KUBELET_CONFIG_FILE=$(sed -e "s/##NODE_IP##/${IP}/" "${KUBELET_CONFIG_TEMPLATE_FILE}")
+    # 写入到配置文件 /etc/kubernetes/kubelet-config.yaml
+    echo "${KUBELET_CONFIG_FILE}" > /etc/kubernetes/kubelet/kubelet-config.yaml
+    # kubelet 启动参数模板文件
+    KUBELET_SETUP_ARGS_TEMPLATE_FILE="/etc/kubernetes/kubelet/kubelet-setup-args.template"
+    # 检查模板文件是否存在
+    if [ ! -f "${KUBELET_SETUP_ARGS_TEMPLATE_FILE}" ]; then
+        log:error "kubelet setup args template file not found at ${KUBELET_SETUP_ARGS_TEMPLATE_FILE}"
+        exit 1
+    fi
+    # 替换模板中的 ##NODE_NAME## 占位符
+    GENERATED_KUBELET_SETUP_ARGS=$(sed -e "s/##NODE_NAME##/${HOSTNAME}/" "${KUBELET_SETUP_ARGS_TEMPLATE_FILE}")
+    # 启动 kubelet 服务
+    kubelet ${GENERATED_KUBELET_SETUP_ARGS} &
 }

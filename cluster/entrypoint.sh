@@ -33,10 +33,26 @@ start:system
 
 # 启动 Etcd 集群
 start:etcd
+# 启动 Containerd 服务
+start:containerd
 
-# 启动 Master 和 Worker 服务
-start:master
-start:worker
+# 启动 Master 节点服务
+if [ -n "$NODE_TYPE" ] && [ "$NODE_TYPE" = "master" ]; then
+    start:kube-apiserver
+    start:kube-controller-manager
+    start:kube-scheduler
+fi
+
+# 等待 kube-apiserver 启动完成
+until kubectl get --raw /readyz 2>/dev/null | grep -q "ok"; do
+    log:info "等待 kube-apiserver 启动..."
+    sleep 2
+done
+
+log:success "kube-apiserver 已启动完成"
+
+# 启动 Kubelet 服务
+start:kubelet
 
 # 执行 CMD 或 docker run 命令行参数
 # "$@" 代表传递给脚本的所有参数（即 Dockerfile 中的 CMD 或 docker run 命令后面的参数）。
