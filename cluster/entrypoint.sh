@@ -22,6 +22,8 @@ mount --bind /tmp/fakeproc/swaps /proc/swaps
 # 当容器以 --privileged 模式运行时，此时拥有足够的权限来修改宿主机内核参数。
 sysctl --system
 
+mount --make-rshared /
+
 # 加载 service.sh 脚本
 source service.sh
 
@@ -51,8 +53,17 @@ done
 
 log:success "kube-apiserver 已启动完成"
 
+
+if [ -n "$NODE_TYPE" ] && [ "$NODE_TYPE" = "master" ]; then
+    start:kubelet
+    start:kube-proxy
+fi
+
 # 启动 Kubelet 服务
-start:kubelet
+# start:kubelet
+
+# 启动 Kube-proxy 服务
+# start:kube-proxy
 
 # 执行 CMD 或 docker run 命令行参数
 # "$@" 代表传递给脚本的所有参数（即 Dockerfile 中的 CMD 或 docker run 命令后面的参数）。

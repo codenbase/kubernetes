@@ -2,6 +2,7 @@
 
 # 基于 Debian 12 镜像
 FROM debian:12
+FROM kindest/node:v1.27.1
 
 # 维护者信息
 LABEL maintainer="Your Name <your.email@example.com>"
@@ -26,6 +27,7 @@ RUN apt update && \
         conntrack \
         ipset \
         ipvsadm \
+        haveged \
         sysstat && \
     # 删除自动生成的 ssh 配置和密钥
     rm -rf /etc/ssh/* && \
@@ -55,6 +57,10 @@ COPY containerd/cni-plugins/* /opt/cni/bin/
 COPY containerd/bin/* containerd/crictl /usr/local/bin/
 COPY containerd/runc.amd64 /usr/local/sbin/runc
 COPY containerd/crictl.yaml /etc/crictl.yaml
+RUN chmod +x /usr/local/sbin/runc
+
+RUN helm repo add cilium https://helm.cilium.io/
+RUN helm repo update
 
 # 设置 PATH
 ENV PATH="/opt/cni/bin:$PATH"

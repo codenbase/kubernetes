@@ -62,6 +62,9 @@ start:system() {
 
     # 启动 SSH 服务
     service ssh start
+
+    # 启动 haveged 守护进程。-w 1024 设置了一个较低的触发阈值，使其在容器环境中更积极地工作
+    haveged -w 1024
 }
 
 start:etcd() {
@@ -159,4 +162,21 @@ start:kubelet() {
     GENERATED_KUBELET_SETUP_ARGS=$(sed -e "s/##NODE_NAME##/${HOSTNAME}/" "${KUBELET_SETUP_ARGS_TEMPLATE_FILE}")
     # 启动 kubelet 服务
     kubelet ${GENERATED_KUBELET_SETUP_ARGS} &
+}
+
+start:kube-proxy() {
+    log:info "开始部署 kube-proxy ..."
+    KUBE_PROXY_CONFIG_TEMPLATE_FILE="/etc/kubernetes/kube-proxy-config.yaml.template"
+    # 检查配置文件是否存在
+    if [ ! -f "${KUBE_PROXY_CONFIG_TEMPLATE_FILE}" ]; then
+        log:error "kube-proxy config template file not found at ${KUBE_PROXY_CONFIG_TEMPLATE_FILE}"
+        exit 1
+    fi
+    # 替换模板中的占位符
+    KUBE_PROXY_CONFIG_FILE=$(sed -e "s/##NODE_NAME##/${HOSTNAME}/" -e "s/##NODE_IP##/${IP}/" "${KUBE_PROXY_CONFIG_TEMPLATE_FILE}")
+    # 写入到配置文件 /etc/kubernetes/kubelet-config.yaml
+    echo "${KUBE_PROXY_CONFIG_FILE}" > /etc/kubernetes/kube-proxy-config.yaml
+    # 启动 kube-proxy 服务
+    kube-proxy --config=/etc/kubernetes/kube-proxy-config.yaml --v=2 &
+    log:success "kube-proxy 已启动"
 }
