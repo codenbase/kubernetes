@@ -1,0 +1,87 @@
+# 继承我们已经构建好的 systemd 基础镜像
+FROM k8s-node-base:0.1
+
+# 安装 containerd.io 并执行清理
+RUN apt-get update && \
+    # 1.添加 Docker 官方 GPG 密钥
+    # install 命令用于创建目录并设置权限，-d 表示创建目录，-m 0755 设置权限为 rwxr-xr-x。
+    # /etc/apt/keyrings 是 Debian 12 推荐的存放第三方源 GPG 密钥的位置。
+    install -m 0755 -d /etc/apt/keyrings && \
+    # 从 Docker 官网下载 GPG 公钥，用于验证将要下载的软件包是否是官方发布的、未经篡改的。
+    curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc && \
+    # 确保所有用户都能读取该密钥文件，以便 apt 在安装时使用。
+    chmod a+r /etc/apt/keyrings/docker.asc && \
+    \
+    # 2.添加 Docker 的 Apt 软件源
+    echo \
+      "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian \
+      $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+      tee /etc/apt/sources.list.d/docker.list > /dev/null && \
+    \
+    # 3.安装 containerd.io 并清理
+    # 再次更新 apt 缓存，因为我们刚刚添加了新的软件源，需要让 apt 知道这个新源里有哪些可用的软件包。
+    apt-get update && \
+    # 安装 containerd.io 软件包。
+    apt-get install -y containerd.io=1.7.27-1 && \
+    # 执行清理工作，移除下载的软件包缓存和索引文件，遵循“黄金法则”，减小镜像体积。
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# 初始化 containerd 配置并设置为开机自启
+RUN \
+    # 1.生成默认配置文件
+    # 首先确保配置目录存在，然后使用 containerd 命令生成一份完整的默认配置
+    mkdir -p /etc/containerd && \
+    containerd config default > /etc/containerd/config.toml && \
+    \
+    # 2.修改 Cgroup Driver 为 systemd
+    # 使用 sed 命令，以一种自动化、幂等的方式完成修改
+    sed -i 's/SystemdCgroup = false/SystemdCgroup = true/g' /etc/containerd/config.toml && \
+    \
+    # 3.设置服务开机自启
+    # 将 containerd 设置为由 systemd 管理的开机自启服务
+    systemctl enable containerd.service
+
+# 定义我们想要安装的 Kubernetes 版本，方便后续修改
+ARG K8S_VERSION="1.31"
+
+# 安装 Kubernetes 组件
+RUN apt-get update && \
+    \
+    # 1.建立信任 (添加 GPG 密钥)
+    # 注意：自 K8s 1.28 起，官方源已迁移到 pkgs.k8s.io，并使用了新的 GPG 密钥。
+    curl -fsSL https://pkgs.k8s.io/core:/stable:/v${K8S_VERSION}/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg && \
+    \
+    # 2.告知位置 (添加软件源)
+    echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v${K8S_VERSION}/deb/ /" | tee /etc/apt/sources.list.d/kubernetes.list && \
+    \
+    # 3.执行安装、锁定并清理
+    apt-get update && \
+    apt-get install -y kubelet kubeadm kubectl && \
+    apt-mark hold kubelet kubeadm kubectl && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# 一次性完成 Kubelet 的 systemd 配置和启用
+RUN \
+    # 1.创建 Drop-In 目录
+    mkdir -p /etc/systemd/system/kubelet.service.d && \
+    \
+    # 2.创建 10-kubeadm.conf 配置文件
+    # 定义服务段落
+    echo '[Service]' > /etc/systemd/system/kubelet.service.d/10-kubeadm.conf && \
+    # 定义 Kubelet 寻找 Kubeconfig 文件的参数
+    echo 'Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/kubelet.conf"' >> /etc/systemd/system/kubelet.service.d/10-kubeadm.conf && \
+    # 定义 Kubelet 寻找其自身配置文件的参数
+    echo 'Environment="KUBELET_CONFIG_ARGS=--config=/var/lib/kubelet/config.yaml"' >> /etc/systemd/system/kubelet.service.d/10-kubeadm.conf && \
+    # 指定由 kubeadm 动态生成的环境变量文件
+    echo 'EnvironmentFile=-/var/lib/kubelet/kubeadm-flags.env' >> /etc/systemd/system/kubelet.service.d/10-kubeadm.conf && \
+    # 指定由用户自定义的额外环境变量文件
+    echo 'EnvironmentFile=-/etc/default/kubelet' >> /etc/systemd/system/kubelet.service.d/10-kubeadm.conf && \
+    # 重置主服务文件中的 ExecStart
+    echo 'ExecStart=' >> /etc/systemd/system/kubelet.service.d/10-kubeadm.conf && \
+    # 定义新的、包含所有动态变量的 ExecStart
+    echo 'ExecStart=/usr/bin/kubelet $KUBELET_KUBECONFIG_ARGS $KUBELET_CONFIG_ARGS $KUBELET_KUBEADM_ARGS $KUBELET_EXTRA_ARGS' >> /etc/systemd/system/kubelet.service.d/10-kubeadm.conf && \
+    \
+    # 3.启用 Kubelet 服务
+    systemctl enable kubelet.service
