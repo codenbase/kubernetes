@@ -11,6 +11,16 @@ CREATE TABLE IF NOT EXISTS articles (
     size_type VARCHAR(20) NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS comments (
+    id SERIAL PRIMARY KEY,
+    user_id INT NOT NULL,
+    article_id INT NOT NULL,
+    content TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_comments_user_id ON comments(user_id);
+
 DO $$
 DECLARE
     i INT := 1;
