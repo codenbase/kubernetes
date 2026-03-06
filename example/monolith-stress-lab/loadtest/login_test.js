@@ -2,7 +2,7 @@ import http from 'k6/http';
 import { check } from 'k6';
 
 export const options = {
-  vus: __ENV.VUS ? parseInt(__ENV.VUS) : 50,
+  vus: __ENV.VUS ? parseInt(__ENV.VUS) : 200,
   duration: __ENV.DURATION || '30s',
   summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99)'],
 };

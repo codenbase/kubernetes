@@ -22,8 +22,8 @@ func InitDB(dsn string) *gorm.DB {
 	if err != nil {
 		log.Fatalf("Failed to retrieve underlying sql.DB: %v", err)
 	}
-	sqlDB.SetMaxOpenConns(100)
-	sqlDB.SetMaxIdleConns(100)
+	sqlDB.SetMaxOpenConns(20)
+	sqlDB.SetMaxIdleConns(20)
 	sqlDB.SetConnMaxLifetime(time.Minute * 5)
 
 	return db

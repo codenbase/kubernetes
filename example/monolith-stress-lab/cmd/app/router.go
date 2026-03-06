@@ -13,9 +13,11 @@ func SetupRouter(db *gorm.DB, jwtSecret []byte) *gin.Engine {
 	r.Use(gin.Recovery())
 
 	authHandler := NewAuthHandler(db, jwtSecret)
+	articleHandler := NewArticleHandler(db)
 
 	r.POST("/login", authHandler.Login)
 	r.GET("/verify", authHandler.Verify)
+	r.GET("/articles/:id", articleHandler.GetArticle)
 
 	return r
 }
