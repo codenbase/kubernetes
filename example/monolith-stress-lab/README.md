@@ -1,113 +1,83 @@
 # Monolith Stress Lab
 
-这是一个极简的单体架构（Web 应用与数据库同节点部署）压力测试沙盒项目。其核心目标是在资源受限的环境下（例如 4C4G），测试并监控 Go 应用服务器与底层数据库在面对高并发、高 CPU 消耗（如 `bcrypt` 密码验证）场景时的极限性能。
+本仓库是用于极其严苛条件下的高并发单机性能压测实验室。被测服务当前主要运行在一台 4C4G 的远程 AWS EC2 实例上。
+本篇文档为 **压测人员专属使用手册**，包含了目前实验室支持的所有压测场景、执行命令以及可调参数。
 
-## 🏗️ 架构概览
+## � 压测总指挥 (施压端执行)
 
-- **业务逻辑层**: Go 1.25, Gin Web 框架, JWT 鉴权。
-- **持久化层**: PostgreSQL 16, GORM。
-- **压测工具**: K6 (运行在独立的辅助容器中)。
-- **部署方式**: Docker Compose。应用与数据库被打包运行在同一个名为 `stress-app` 的容器内模拟单台物理机，容器资源被严格限制为 4 核 CPU 与 4GB 内存。
+请在配备了 K6 环境的施压服务器上执行以下命令。所有的压测脚本都在 `loadtest/` 目录下。
 
-## 🚀 快速部署与测试指南
-
-### 1. 构建与启动环境
-
-在项目根目录下执行以下命令：
-
-```bash
-docker-compose build --no-cache app
-docker-compose up -d
-```
-> 这将编译 Go 代码并把 Postgres 数据库打包运行，全过程可能需要 1~2 分钟来初始化数据库。
-
-### 2. 验证运行状态
-
-确保 `stress-app` 和 `k6-loadtest` 容器均处于 Up 状态：
-```bash
-docker-compose ps
-```
-
-您可以查看应用日志确保其已经成功监听 8080 端口且没有报错：
-```bash
-docker logs -f stress-app
-```
-
-### 3. 一键发起压力测试
-
-我们在项目内提供了一份默认的 K6 压测脚本 (`loadtest/login_test.js`)，它将模拟 50 个并发用户持续 30 秒进行 `/login` 登录接口的轰炸。
-
-直接利用后台已经部署好的 `k6-loadtest` 容器执行压测：
-```bash
-docker exec -it k6-loadtest k6 run /loadtest/login_test.js
-```
-
-**如何看懂 K6 的压测指标？**
-压测结束后，控制台会输出一张报表，重点关注：
-- `http_reqs`: 显示总请求数以及最重要的 **QPS（每秒请求数）**。
-- `http_req_duration`: 显示接口耗时。关注 `avg` (平均延迟，反映整体健康度) 和 `p(99)` (99%的尾部延迟，反映极端卡顿用户的体验)。
+### 核心通用参数
+所有的压测脚本都支持以下环境变量进行“战前换挡”：
+- `-e BASE_URL=http://x.x.x.x:8080`: 被测应用服务器的内网/外网地址。
+- `-e VUS=200`: 并发虚拟用户数 (Virtual Users)，决定火力大小。
+- `-e DURATION=30s`: 持续火力时间 (如 `30s`, `1m`)。
 
 ---
 
-## 🛠️ 原生 Linux 性能瓶颈监控指南
+### 实验一：登录鉴权与 CPU 极限消耗 (`login_test.js`)
+**场景**：模拟用户并发登录。后端需要消耗大量的 CPU 算力来计算 Bcrypt 密码哈希。
+**特有参数**：
+- `-e COST=10`: [动态特权参数] K6 会在压测开始前，自动调用服务端的上帝接口，强行把全库几千名验证用户的密码计算成本篡改为指定值 (例如 4 是极速，12 是地狱难度)。
 
-压测的精髓不在于看最终数字，而在于**在压测进行中寻找系统的瓶颈**。我们在 `stress-app` 容器中预装了原生的 Linux 诊断工具。
-
-请打开一个**新终端窗口**，进入目标服务器的 Bash 环境：
+**压测命令**：
 ```bash
-docker exec -it stress-app bash
+sudo docker run --rm -it -v /home/ubuntu/loadtest:/loadtest \
+  -e VUS=200 -e DURATION=30s -e COST=10 \
+  -e BASE_URL=http://172.31.44.56:8080 \
+  grafana/k6 run /loadtest/login_test.js
 ```
-
-在另一个窗口启动 K6 压测，同时在这个 Bash 中使用以下工具观察：
-
-### 1. 全局资源概览 (`top`)
-最经典的命令，用于查看系统整体 CPU 和内存的损耗：
-```bash
-top
-```
-- **核心观测点**:
-  - `%Cpu(s) - us`: 用户态 CPU 占用。如果它接近 100%，说明代码逻辑（例如海量的 `bcrypt` 哈希计算）吃光了算力。
-  - `MiB Mem`: 关注可用内存 (`free`) 是否持续下降，判断是否有严重的内存泄漏。
-  - 💡 **进阶用法**：在 `top` 界面中按键盘 `1` 键，可以展开查看 4 个限制核心中每一个的负载分配是否均衡。
-
-### 2. 精确监控进程层面的阻力 (`pidstat`)
-`top` 只能看大盘，而 `pidstat` 能够精确拆解到底是 Go Web 程序（`main`）成了瓶颈，还是 PostgreSQL 数据库（`postgres`）被压趴下了。
-
-**监控各个进程的 CPU 抢占（每 2 秒刷新一次）：**
-```bash
-pidstat -u 2
-```
-查看 `%CPU` 和 `Command` 列的对应关系。
-
-**监控各个进程的内存占用情况：**
-```bash
-pidstat -r 2
-```
-关注 `%MEM` 指标的变化。
-
-### 3. 磁盘 I/O 阻塞排查 (`iostat`)
-随着并发上升，PostgreSQL 的刷盘和查询可能会遇到极其严重的磁盘读写瓶颈。
-
-**监控磁盘详细 I/O 指标（每 2 秒刷新一次，显示详细列）：**
-```bash
-iostat -x 2
-```
-- **核心观测点**:
-  - `%util`: 磁盘利用率。如果这个值长期维持在 `80% - 100%`，说明磁盘已经满载，IO 是最大的瓶颈。
-  - `await`: 每个 I/O 请求的平均等待时间（毫秒）。过高的数值意味着 SQL 读写请求正在排队枯等。
 
 ---
 
-## 🧹 关于环境的重置与清理
+### 实验二：网关层长连接与极速 JWT 验证 (`jwt_test.js`)
+**场景**：极其轻量级的空转接口，仅作网关层的 JWT Token 签名验证。用来测试纯网络 IO 与框架路由的极速吞吐上限。
 
-如果由于测试需要，您修改了数据库构建相关的代码（例如 `db/init.sql` 中的表结构，或者修改了其内部密码签发的 Bcrypt Cost 重试极限测试），请**务必注意**：简单的 `docker-compose restart` 或者 `build` 是不够的，因为旧的数据卷依然挂载着。
-
-**正确的环境彻底销毁与重建步骤为：**
+**压测命令**：
 ```bash
-# 连同数据库持久化卷一起销毁
-docker-compose down -v
+sudo docker run --rm -it -v /home/ubuntu/loadtest:/loadtest \
+  -e VUS=500 -e DURATION=30s \
+  -e BASE_URL=http://172.31.44.56:8080 \
+  grafana/k6 run /loadtest/jwt_test.js
+```
 
-# 重新构建与启动
-docker-compose build app
-docker-compose up -d
+---
+
+### 实验三：数据库小包高频直读 (`article_small_test.js`)
+**场景**：绕过缓存直达数据库，随机读取 100 字节左右的小文章。测试 Postgres 数据库高频查库。
+
+**压测命令**：
+```bash
+sudo docker run --rm -it -v /home/ubuntu/loadtest:/loadtest \
+  -e VUS=200 -e DURATION=30s \
+  -e BASE_URL=http://172.31.44.56:8080 \
+  grafana/k6 run /loadtest/article_small_test.js
+```
+
+---
+
+### 实验四：数据库大包高频网传 (`article_large_test.js`)
+**场景**：直达数据库，随机读取超过 50KB 的超长文本文章。测试 Go 语言的内存大对象 GC 切片开销与磁盘带阅读带宽极限。
+
+**压测命令**：
+```bash
+sudo docker run --rm -it -v /home/ubuntu/loadtest:/loadtest \
+  -e VUS=200 -e DURATION=30s \
+  -e BASE_URL=http://172.31.44.56:8080 \
+  grafana/k6 run /loadtest/article_large_test.js
+```
+
+---
+
+### 实验五：高频写盘与普通索引裂变 (`comment_test.js`)
+**场景**：模拟无解缓冲下的海量用户并发写评论，触发巨大的 Postgres 树形索引更新与磁盘同步刷盘 I/O 等待。
+**特有参数**：
+- `-e DB_MAX_OPEN=15`: [动态特权参数] K6 会在压测开始前，自动调取服务端上帝接口，把 Go 程序的底层 Postgres 连接池强制缩容或扩容到指定大小，让您感受“线程排队拥堵”引发的惨案。
+
+**压测命令**：
+```bash
+sudo docker run --rm -it -v /home/ubuntu/loadtest:/loadtest \
+  -e VUS=200 -e DURATION=30s -e DB_MAX_OPEN=15 \
+  -e BASE_URL=http://172.31.44.56:8080 \
+  grafana/k6 run /loadtest/comment_test.js
 ```
