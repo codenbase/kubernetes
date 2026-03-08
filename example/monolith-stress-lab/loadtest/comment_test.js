@@ -10,6 +10,24 @@ export const options = {
   summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99)'],
 };
 
+export function setup() {
+  const maxOpen = __ENV.DB_MAX_OPEN ? parseInt(__ENV.DB_MAX_OPEN) : null;
+  const baseUrl = __ENV.BASE_URL || 'http://app:8080';
+  
+  if (maxOpen) {
+    // We adjust both max_open and max_idle to the same value to prevent connection thrashing
+    const payload = JSON.stringify({ max_open: maxOpen, max_idle: maxOpen });
+    const params = { headers: { 'Content-Type': 'application/json' } };
+    const res = http.put(`${baseUrl}/config/db-pool`, payload, params);
+    
+    if (res.status === 200) {
+      console.log(`[*] Setup: Auto-tuning DB Pool (MaxOpen) to ${maxOpen} SUCCESS`);
+    } else {
+      console.error(`[!] Setup: Failed to tune DB Pool to ${maxOpen}: ${res.status} ${res.body}`);
+    }
+  }
+}
+
 export default function () {
   // Random user ID (1-10000) mimicking reality
   const userId = Math.floor(Math.random() * 10000) + 1;
