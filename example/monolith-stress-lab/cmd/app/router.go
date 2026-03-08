@@ -15,11 +15,16 @@ func SetupRouter(db *gorm.DB, jwtSecret []byte) *gin.Engine {
 	authHandler := NewAuthHandler(db, jwtSecret)
 	articleHandler := NewArticleHandler(db)
 	commentHandler := NewCommentHandler(db)
+	configHandler := NewConfigHandler(db)
 
 	r.POST("/login", authHandler.Login)
 	r.GET("/verify", authHandler.Verify)
 	r.GET("/articles/:id", articleHandler.GetArticle)
 	r.POST("/comments", commentHandler.CreateComment)
+
+	// Zero-Downtime Tuning Endpoints
+	r.PUT("/config/db-pool", configHandler.UpdateDbPool)
+	r.PUT("/config/bcrypt-cost", configHandler.UpdateBcryptCost)
 
 	return r
 }

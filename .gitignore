@@ -28,9 +28,17 @@ go.work.sum
 .env
 
 # Editor/IDE
+.agents/
 .idea/
 .vscode/
 .obsidian/
 
 # File
 .DS_Store
+
+# Archives and build artifacts
+*.tar.gz
+*.tar
+*.zip
+stress-app-linux
+main

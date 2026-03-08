@@ -1,5 +1,8 @@
 import http from 'k6/http';
 import { check } from 'k6';
+import exec from 'k6/execution';
+
+let errorCount = 0;
 
 export const options = {
   vus: __ENV.VUS ? parseInt(__ENV.VUS) : 200,
@@ -23,7 +26,15 @@ export default function () {
     headers: { 'Content-Type': 'application/json' },
   };
   
-  const res = http.post('http://app:8080/comments', payload, params);
+  const baseUrl = __ENV.BASE_URL || 'http://app:8080';
+  const res = http.post(`${baseUrl}/comments`, payload, params);
+
+  if (res.status !== 201) {
+    if (errorCount < 3) {
+      console.error(`[VU ${exec.vu.idInTest}] Post Comment Failed. Status: ${res.status}, Error: ${res.error}, Body: ${res.body}`);
+      errorCount++;
+    }
+  }
   
   check(res, {
     'is created status 201': (r) => r.status === 201,
