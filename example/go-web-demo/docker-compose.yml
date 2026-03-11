@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: demo
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - web-net
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: "postgres://postgres:postgres@postgres:5432/demo?sslmode=disable"
+    ports:
+      - "8081:8080" # 可选绑定给本地测试后端直接访问用
+    depends_on:
+      - postgres
+    networks:
+      - web-net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:80" # 在本地可以通过 localhost:8080 访问完整网页和使用 Nginx 的 /api 代理
+    depends_on:
+      - backend
+    networks:
+      - web-net
+
+volumes:
+  postgres-data:
+
+networks:
+  web-net:

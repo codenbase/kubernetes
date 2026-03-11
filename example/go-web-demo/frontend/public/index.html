@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Go + K8s 极简 Web 演示</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>K8s Demo App</h1>
+            <p>极简的 Go + Vanilla JS CRUD 演示</p>
+        </header>
+
+        <main>
+            <div class="input-group">
+                <input type="text" id="itemInput" placeholder="输入你想添加的内容..." />
+                <button id="addBtn">添加记录</button>
+            </div>
+
+            <ul id="itemList" class="item-list">
+                <!-- 动态列表项渲染在此处 -->
+            </ul>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
