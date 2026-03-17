@@ -3,7 +3,7 @@ package main
 import (
 	"log"
 
-	"github.com/codenbase/kubernetes/example/monolith-stress-lab/cmd/app"
+	"github.com/codenbase/kubernetes/monolith-stress-lab/cmd/app"
 )
 
 func main() {

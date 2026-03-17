@@ -1,4 +1,4 @@
-module go-web-demo
+module github.com/codenbase/kubernetes/web-demo
 
 go 1.25.1
 

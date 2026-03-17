@@ -3,7 +3,7 @@ package biz
 import (
 	"context"
 
-	"go-web-demo/internal/store"
+	"github.com/codenbase/kubernetes/web-demo/internal/store"
 )
 
 // ItemBiz 处理业务逻辑

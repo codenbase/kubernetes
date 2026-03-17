@@ -1,4 +1,4 @@
-module example.com/operator
+module github.com/codenbase/kubernetes/operator
 
 go 1.24.6
 

@@ -32,7 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	// 注意：这里的导入路径需要根据你实际的 go.mod 模块名进行修改
-	cachev1alpha1 "example.com/operator/api/v1alpha1"
+	cachev1alpha1 "github.com/codenbase/kubernetes/operator/api/v1alpha1"
 )
 
 // MemcachedReconciler 负责调谐 Memcached 对象

@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"os"
 
-	"go-web-demo/internal/biz"
-	"go-web-demo/internal/handler"
-	"go-web-demo/internal/store"
+	"github.com/codenbase/kubernetes/web-demo/internal/biz"
+	"github.com/codenbase/kubernetes/web-demo/internal/handler"
+	"github.com/codenbase/kubernetes/web-demo/internal/store"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )

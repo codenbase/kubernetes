@@ -1,4 +1,4 @@
-module github.com/codenbase/kubernetes/example/monolith-stress-lab
+module github.com/codenbase/kubernetes/monolith-stress-lab
 
 go 1.25.1
 

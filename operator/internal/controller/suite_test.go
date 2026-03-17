@@ -32,7 +32,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	cachev1alpha1 "example.com/operator/api/v1alpha1"
+	cachev1alpha1 "github.com/codenbase/kubernetes/operator/api/v1alpha1"
 	// +kubebuilder:scaffold:imports
 )
 

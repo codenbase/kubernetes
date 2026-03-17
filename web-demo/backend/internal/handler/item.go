@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"go-web-demo/internal/biz"
+	"github.com/codenbase/kubernetes/web-demo/internal/biz"
 )
 
 // ItemHandler 控制器

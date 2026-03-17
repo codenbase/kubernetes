@@ -35,8 +35,8 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	cachev1alpha1 "example.com/operator/api/v1alpha1"
-	"example.com/operator/internal/controller"
+	cachev1alpha1 "github.com/codenbase/kubernetes/operator/api/v1alpha1"
+	"github.com/codenbase/kubernetes/operator/internal/controller"
 	// +kubebuilder:scaffold:imports
 )
 
