@@ -1,4 +1,5 @@
-FROM nginx:alpine
+ARG REGISTRY_PREFIX=""
+FROM ${REGISTRY_PREFIX}nginx:stable-alpine
 
 # 移除默认配置
 RUN rm /etc/nginx/conf.d/default.conf

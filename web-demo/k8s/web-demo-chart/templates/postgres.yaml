@@ -1,0 +1,147 @@
+# ==========================================
+# 1. 数据库机密 (Secret)
+# ==========================================
+apiVersion: v1
+kind: Secret
+# 【Helm 魔法 1：动态命名】使用 .Release.Name 防止同一个集群安装多个同名冲突
+metadata:
+  name: {{ .Release.Name }}-postgres-secret
+  namespace: {{ .Release.Namespace }}
+type: Opaque
+stringData:
+  # 【Helm 魔法 2：变量注入与类型保护】读取 values.yaml 并强制转为字符串(quote)
+  POSTGRES_USER: {{ .Values.database.auth.username | quote }}
+  POSTGRES_PASSWORD: {{ .Values.database.auth.password | quote }}
+  POSTGRES_DB: {{ .Values.database.auth.database | quote }}
+
+---
+# ==========================================
+# 2. 数据库初始化配置 (ConfigMap)
+# ==========================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-postgres-init-sql
+  namespace: {{ .Release.Namespace }}
+data:
+  init.sql: |
+    CREATE TABLE IF NOT EXISTS items (
+        id SERIAL PRIMARY KEY,
+        content VARCHAR(255) NOT NULL
+    );
+    INSERT INTO items (content) VALUES ('学习 Kubernetes 基础概念');
+    INSERT INTO items (content) VALUES ('部署第一个 Go 语言 Web 极简容器应用');
+
+---
+# ==========================================
+# 3. 裸机物理盘绑定 (Local PV)
+# ==========================================
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ .Release.Name }}-local-postgres-pv
+spec:
+  capacity:
+    # 动态读取存储大小
+    storage: {{ .Values.database.storage.size }}
+  accessModes:
+    - ReadWriteOnce
+  local:
+    path: /mnt/k8s-data/postgres
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          # 动态读取你要把硬盘焊死在哪台物理机上
+          - {{ .Values.database.storage.affinityNodeName }}
+
+---
+# ==========================================
+# 4. 无头服务 (Headless Service)
+# ==========================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-postgres-svc
+  namespace: {{ .Release.Namespace }}
+spec:
+  clusterIP: None
+  ports:
+    - port: 5432
+      targetPort: 5432
+  selector:
+    app: {{ .Release.Name }}-postgres
+
+---
+# ==========================================
+# 5. 有状态副本集 (StatefulSet)
+# ==========================================
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .Release.Name }}-postgres
+  namespace: {{ .Release.Namespace }}
+spec:
+  serviceName: {{ .Release.Name }}-postgres-svc
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-postgres
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-postgres
+    spec:
+      # 【逻辑判断与 toYaml 函数】
+      # 意思是：如果 values 里的 imagePullSecrets 不是空的，就把那段数组原封不动地渲染出来
+      {{- if .Values.database.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml .Values.database.imagePullSecrets | nindent 8 }}
+      {{- end }}
+
+      containers:
+        - name: postgres
+          image: "{{ .Values.database.image.repository }}:{{ .Values.database.image.tag }}"
+          imagePullPolicy: {{ .Values.database.image.pullPolicy }}
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-postgres-secret
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-postgres-secret
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-postgres-secret
+                  key: POSTGRES_DB
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+            - name: init-sql-volume
+              # 同样是初始化，这里依然保持不动
+              mountPath: /docker-entrypoint-initdb.d
+      volumes:
+        - name: init-sql-volume
+          configMap:
+            # 指向动态生成的 ConfigMap 名字
+            name: {{ .Release.Name }}-postgres-init-sql
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: {{ .Values.database.storage.size }}

@@ -1,0 +1,51 @@
+# ==========================================
+# 1. 前端应用部署 (Deployment)
+# ==========================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-demo-frontend
+  namespace: web-demo
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: web-demo-frontend
+  template:
+    metadata:
+      labels:
+        app: web-demo-frontend
+    spec:
+      # 同样的套路，把前端从控制平面踢出去
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: NotIn
+                    values:
+                      - k8s-control-plane
+      containers:
+        - name: frontend
+          image: ghcr.io/codenbase/web-demo-frontend:v1.0.0
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+
+---
+# ==========================================
+# 2. 前端内部服务总线 (ClusterIP Service)
+# ==========================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-demo-frontend-svc
+  namespace: web-demo
+spec:
+  type: ClusterIP
+  selector:
+    app: web-demo-frontend
+  ports:
+    - port: 80
+      targetPort: 80

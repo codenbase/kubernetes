@@ -1,0 +1,71 @@
+# ==========================================
+# 1. 业务应用部署 (Deployment)
+# 包含：环境变量注入 + 节点反亲和性（禁止调度到 Master）
+# ==========================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-demo-backend
+  namespace: web-demo
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: web-demo-backend
+  template:
+    metadata:
+      labels:
+        app: web-demo-backend
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: NotIn
+                    values:
+                      - k8s-control-plane
+
+      containers:
+        - name: backend
+          image: ghcr.io/codenbase/web-demo-backend:v1.0.0
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          env:
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_USER
+            - name: DB_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_PASSWORD
+            - name: DB_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_DB
+            - name: DATABASE_URL
+              value: "postgres://$(DB_USER):$(DB_PASS)@postgres-svc:5432/$(DB_NAME)?sslmode=disable"
+
+---
+# ==========================================
+# 2. 内部服务总线 (ClusterIP Service)
+# 既然有了 Ingress 门卫，业务 Service 就不需要暴露 NodePort 了，退回最安全的内部 IP
+# ==========================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-demo-backend-svc
+  namespace: web-demo
+spec:
+  type: ClusterIP # 回归默认，仅在集群内部可访问
+  selector:
+    app: web-demo-backend
+  ports:
+    - port: 80
+      targetPort: 8080

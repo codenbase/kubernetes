@@ -1,0 +1,73 @@
+# ==========================================
+# 1. 后端业务应用 (Deployment)
+# ==========================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-backend
+  namespace: {{ .Release.Namespace }}
+spec:
+  # 动态读取副本数
+  replicas: {{ .Values.backend.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-backend
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-backend
+    spec:
+      # 动态配置节点反亲和性（踢出控制平面）
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: NotIn
+                    values:
+                      - {{ .Values.backend.excludeNodeName }}
+      containers:
+        - name: backend
+          # 动态拼装镜像和 Tag
+          image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
+          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+          ports:
+            - containerPort: 8080
+          env:
+            # 这里的 Secret 名字必须和 postgres.yaml 里生成的保持绝对一致！
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-postgres-secret
+                  key: POSTGRES_USER
+            - name: DB_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-postgres-secret
+                  key: POSTGRES_PASSWORD
+            - name: DB_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Release.Name }}-postgres-secret
+                  key: POSTGRES_DB
+            - name: DATABASE_URL
+              # 动态拼装数据库连接串，注意内部 Service 域名也加上了 Release.Name 前缀
+              value: "postgres://$(DB_USER):$(DB_PASS)@{{ .Release.Name }}-postgres-svc:5432/$(DB_NAME)?sslmode=disable"
+
+---
+# ==========================================
+# 2. 后端内部总线 (Service)
+# ==========================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-backend-svc
+  namespace: {{ .Release.Namespace }}
+spec:
+  type: ClusterIP
+  selector:
+    app: {{ .Release.Name }}-backend
+  ports:
+    - port: 80
+      targetPort: 8080

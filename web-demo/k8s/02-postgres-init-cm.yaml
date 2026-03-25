@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init-sql
+  namespace: web-demo
+data:
+  # 这里的 Key 是文件名，Value 是文件内容
+  # 在阶段三，我们会把这个文件挂载到 Postgres 容器的 /docker-entrypoint-initdb.d/ 目录下
+  # Postgres 容器首次启动时，会自动扫描该目录并执行里面的所有 .sql 文件！
+  init.sql: |
+    CREATE TABLE IF NOT EXISTS items (
+        id SERIAL PRIMARY KEY,
+        content VARCHAR(255) NOT NULL
+    );
+    INSERT INTO items (content) VALUES ('学习 Kubernetes 基础概念');
+    INSERT INTO items (content) VALUES ('部署第一个 Go 语言 Web 极简容器应用');

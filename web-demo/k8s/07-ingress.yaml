@@ -1,0 +1,32 @@
+# 全栈路由网关
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: web-demo-ingress
+  namespace: web-demo
+  annotations:
+    # 本地测试环境，无证书，加上这个注解可以防止重定向到 HTTPS
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  ingressClassName: nginx
+  rules:
+    - http:
+        paths:
+          # 【规则 1：API 路由】优先匹配 /api 前缀的请求，转发给后端 Go 程序
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: web-demo-backend-svc
+                port:
+                  number: 80
+                  
+          # 【规则 2：前端路由】兜底规则，其余所有请求统统交给前端 UI
+          # K8s Ingress 极其聪明，默认“最长路径匹配优先”，所以不用担心 / 会覆盖 /api
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web-demo-frontend-svc
+                port:
+                  number: 80

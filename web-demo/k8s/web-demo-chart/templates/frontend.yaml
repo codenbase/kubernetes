@@ -1,0 +1,51 @@
+# ==========================================
+# 1. 前端业务应用 (Deployment)
+# ==========================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-frontend
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: {{ .Values.frontend.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}-frontend
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}-frontend
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: NotIn
+                    values:
+                      # 偷个懒，直接复用后端的排除节点配置
+                      - {{ .Values.backend.excludeNodeName }}
+      containers:
+        - name: frontend
+          image: "{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
+          imagePullPolicy: {{ .Values.frontend.image.pullPolicy }}
+          ports:
+            - containerPort: 80
+
+---
+# ==========================================
+# 2. 前端内部总线 (Service)
+# ==========================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-frontend-svc
+  namespace: {{ .Release.Namespace }}
+spec:
+  type: ClusterIP
+  selector:
+    app: {{ .Release.Name }}-frontend
+  ports:
+    - port: 80
+      targetPort: 80

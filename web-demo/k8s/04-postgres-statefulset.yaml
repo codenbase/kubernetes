@@ -1,0 +1,93 @@
+# ==========================================
+# 1. Headless Service (无头服务)
+# 作用：为数据库提供固定的内部 DNS 域名，而不是分配一个会漂移的 ClusterIP
+# ==========================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-svc
+  namespace: web-demo
+  labels:
+    app: postgres
+spec:
+  # 这行是无头服务的灵魂！告诉 K8s 不要分配虚 IP，直接解析到后面的 Pod 真实 IP
+  clusterIP: None 
+  ports:
+    - port: 5432
+      targetPort: 5432
+  selector:
+    app: postgres
+
+---
+# ==========================================
+# 2. StatefulSet (有状态副本集)
+# 作用：管理数据库 Pod，保证启动顺序、网络标识固定、以及存储的持久化绑定
+# ==========================================
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: web-demo
+spec:
+  serviceName: "postgres-svc" # 必须与上面的无头服务名称绑定
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      imagePullSecrets:
+        - name: aliyun-registry-secret
+      containers:
+        - name: postgres
+          image: registry.cn-hangzhou.aliyuncs.com/akuku/postgres:18.3-bookworm
+          ports:
+            - containerPort: 5432
+          
+          # 【魔法 1：注入我们在阶段二配置的机密】
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_DB
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          
+          # 【魔法 2：挂载存储与初始化脚本】
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+            - name: init-sql-volume
+              # Postgres 官方镜像约定：启动时会自动执行该目录下的脚本
+              mountPath: /docker-entrypoint-initdb.d
+      
+      # 定义需要挂载的特殊卷（ConfigMap）
+      volumes:
+        - name: init-sql-volume
+          configMap:
+            name: postgres-init-sql
+
+  # 【魔法 3：动态存储声明模板 (PVC Template)】
+  # StatefulSet 特有功能，K8s 会根据这个模板，自动去向底层云盘（或本地存储）申请 1GB 的空间，并死死绑定给这个 Pod
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: 1Gi

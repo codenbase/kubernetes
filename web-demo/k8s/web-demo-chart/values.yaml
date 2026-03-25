@@ -1,0 +1,53 @@
+# ==========================================
+# Web-Demo 全栈微服务 Helm 配置中心
+# 架构师准则：这里是唯一允许人类修改的地方
+# ==========================================
+
+# 1. 数据库配置 (PostgreSQL)
+database:
+  # 数据库镜像配置
+  image:
+    repository: "registry.cn-hangzhou.aliyuncs.com/akuku/postgres"
+    tag: "18.3-bookworm"
+    pullPolicy: Always
+  # 私有仓库的门禁卡（如果是公开镜像，这里留空数组 [] 即可）
+  # 比如你用阿里云时可以写成：
+  imagePullSecrets:
+    - name: aliyun-registry-secret
+  # imagePullSecrets: []
+
+  auth:
+    username: "akuku"
+    password: "supersecretpassword" # 生产环境可通过 --set 动态传入，避免硬编码
+    database: "webdemo"
+  storage:
+    size: "1Gi"
+    # 这里填你之前做 Local PV 绑定时使用的 Worker 节点名称
+    affinityNodeName: "k8s-worker-01" 
+
+# 2. 后端服务配置 (Go API)
+backend:
+  replicaCount: 2
+  image:
+    repository: "ghcr.io/codenbase/web-demo-backend"
+    tag: "v1.0.0"
+    pullPolicy: Always
+  # 之前排除控制平面的节点名
+  excludeNodeName: "k8s-control-plane"
+
+# 3. 前端服务配置 (Vanilla JS + Nginx)
+frontend:
+  replicaCount: 2
+  image:
+    repository: "ghcr.io/codenbase/web-demo-frontend"
+    tag: "v1.0.0"
+    pullPolicy: Always
+
+# 4. 七层网关配置 (Ingress)
+ingress:
+  enabled: true
+  className: "nginx"
+  # 你刚刚在本地配的域名！
+  host: "dawn.io" 
+  # 开发环境保命开关（关闭 308 强制跳转）
+  sslRedirect: false

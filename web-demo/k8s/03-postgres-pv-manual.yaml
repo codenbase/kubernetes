@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: local-postgres-pv
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+
+  # 必须配置为 local 模式
+  local:
+    path: /mnt/k8s-data/postgres
+  # 重点来了！节点亲和性（Node Affinity）
+  # 这段代码告诉 K8s：这块盘物理上长在 "node-1" 这台机器上。
+  # 谁敢绑定这块盘，调度器就必须把谁丢到 "node-1" 上去运行！
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - k8s-worker-01
