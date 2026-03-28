@@ -1,4 +1,4 @@
-# Kubernetes Basics & Go Web Demo
+# Kubernetes Basics & Web Demo
 
 这是一个前后端分离的极简 CRUD Web 应用程序，主要用于演示在 Docker 和 Kubernetes 中的服务部署及编排。
 
@@ -32,19 +32,22 @@ docker-compose up --build -d
 1. **构建镜像并加载到本地集群 (以 minikube 为例)**
 
    ```bash
-   docker build -t go-web-demo-backend:latest ./backend
-   docker build -t go-web-demo-frontend:latest ./frontend
-   minikube image load go-web-demo-backend:latest
-   minikube image load go-web-demo-frontend:latest
+   docker build -t web-demo-backend:latest ./backend
+   docker build -t web-demo-frontend:latest ./frontend
+   minikube image load web-demo-backend:latest
+   minikube image load web-demo-frontend:latest
    ```
 
 2. **应用 K8s 清单配置**
 
    ```bash
-   kubectl apply -f k8s/postgres.yaml
-   kubectl apply -f k8s/backend.yaml
-   kubectl apply -f k8s/frontend.yaml
-   kubectl apply -f k8s/ingress.yaml
+   kubectl apply -f k8s/01-postgres-secret.yaml
+   kubectl apply -f k8s/02-postgres-init-cm.yaml
+   kubectl apply -f k8s/03-postgres-pv-manual.yaml
+   kubectl apply -f k8s/04-postgres-statefulset.yaml
+   kubectl apply -f k8s/05-backend-deployment.yaml
+   kubectl apply -f k8s/06-frontend-deployment.yaml
+   kubectl apply -f k8s/07-ingress.yaml
    ```
 
 3. **设置 Hosts (假设你使用 Nginx Ingress Controller)**

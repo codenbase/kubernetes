@@ -1,19 +1,19 @@
-name: Publish go-web-demo to GHCR
+name: Publish web-demo to GHCR
 
-# 触发条件：当你推送到 main 分支且更新了 example/go-web-demo 目录下的文件时
+# 触发条件：当你推送到 main 分支且更新了 web-demo 目录下的文件时
 on:
   push:
     branches: [ main ]
     paths:
-      - 'example/go-web-demo/**'
+      - 'web-demo/**'
   # 允许在 GitHub Actions 页面上手动触发
   workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
   # 镜像名称会以代码库的 Owner (或 Organization) 为前缀
-  BACKEND_IMAGE_NAME: ${{ github.repository_owner }}/go-web-demo-backend
-  FRONTEND_IMAGE_NAME: ${{ github.repository_owner }}/go-web-demo-frontend
+  BACKEND_IMAGE_NAME: ${{ github.repository_owner }}/web-demo-backend
+  FRONTEND_IMAGE_NAME: ${{ github.repository_owner }}/web-demo-frontend
 
 jobs:
   build-and-push:
@@ -37,7 +37,7 @@ jobs:
       - name: 构建并推送 Backend 镜像
         uses: docker/build-push-action@v5
         with:
-          context: example/go-web-demo/backend
+          context: web-demo/backend
           push: true
           # 自动打上 latest 标签
           tags: ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}:latest
@@ -45,6 +45,6 @@ jobs:
       - name: 构建并推送 Frontend 镜像
         uses: docker/build-push-action@v5
         with:
-          context: example/go-web-demo/frontend
+          context: web-demo/frontend
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:latest

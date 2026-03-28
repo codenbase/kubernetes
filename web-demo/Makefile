@@ -6,8 +6,8 @@ REGISTRY := ghcr.io
 IMAGE_PREFIX := $(REGISTRY)/$(GITHUB_OWNER)
 TAG ?= latest
 
-BACKEND_IMAGE := $(IMAGE_PREFIX)/go-web-demo-backend:$(TAG)
-FRONTEND_IMAGE := $(IMAGE_PREFIX)/go-web-demo-frontend:$(TAG)
+BACKEND_IMAGE := $(IMAGE_PREFIX)/web-demo-backend:$(TAG)
+FRONTEND_IMAGE := $(IMAGE_PREFIX)/web-demo-frontend:$(TAG)
 
 .PHONY: all build-backend build-frontend push-backend push-frontend push login update-k8s
 
@@ -37,7 +37,7 @@ login:
 
 # 将 K8s manifests 里的镜像统一改为 GHCR 的地址
 update-k8s:
-	sed -i.bak 's|image: go-web-demo-backend:latest|image: $(BACKEND_IMAGE)|g' k8s/backend.yaml
-	sed -i.bak 's|image: go-web-demo-frontend:latest|image: $(FRONTEND_IMAGE)|g' k8s/frontend.yaml
+	sed -i.bak 's|image: web-demo-backend:latest|image: $(BACKEND_IMAGE)|g' k8s/05-backend-deployment.yaml
+	sed -i.bak 's|image: web-demo-frontend:latest|image: $(FRONTEND_IMAGE)|g' k8s/06-frontend-deployment.yaml
 	rm -f k8s/*.bak
 	@echo "K8s manifests 已更新！现在它们使用的是 $(IMAGE_PREFIX) 下的镜像。"
