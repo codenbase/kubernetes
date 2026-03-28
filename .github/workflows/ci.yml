@@ -1,20 +1,21 @@
-name: Web-Demo CI Pipeline
+name: Web-Demo CI/CD Pipeline
 
 on:
   pull_request:
     branches: [ "main" ]
   push:
     branches: [ "main" ]
-  workflow_dispatch: 
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
-  # 动态生成你的镜像名前缀，比如 ghcr.io/codenbase/web-demo-backend
+  # 声明前后端两个镜像的名字
   BACKEND_IMAGE: ghcr.io/${{ github.repository_owner }}/web-demo-backend
+  FRONTEND_IMAGE: ghcr.io/${{ github.repository_owner }}/web-demo-frontend
 
 jobs:
   # ==========================================
-  # 阶段一：质检防御网 (Pull Request & Push)
+  # 阶段一：质检防御网
   # ==========================================
   test:
     name: Code Quality & Unit Tests
@@ -27,7 +28,7 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version: '1.25'
-          # 【消灭警告】：精准告诉插件 go.sum 在哪里！
+          # 【注意路径变更】：同步修改为 web-demo/backend
           cache-dependency-path: web-demo/backend/go.sum
 
       - name: Run Go Vet
@@ -41,13 +42,11 @@ jobs:
           go test -v ./...
 
   # ==========================================
-  # 阶段二：兵工厂制造与推送 (仅在合并到 main 时执行)
+  # 阶段二：前后端双轨制造与推送
   # ==========================================
   build-and-push:
-    name: Build & Push Docker Image
-    # 【防线】：只有 test 任务成功，才执行打包！
+    name: Build & Push Docker Images
     needs: test
-    # 【许可】：如果是代码推送，或者是手动点击按钮，都允许放行！
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     
@@ -66,22 +65,42 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # 【一镜多签魔法】：自动生成机器 Tag 和最新 Tag
-      - name: Extract Docker metadata
-        id: meta
+      # ------------------------------------------
+      # 🎯 制造后端镜像
+      # ------------------------------------------
+      - name: Extract Backend metadata
+        id: meta-backend  # 【隔离ID】：防止变量被前端覆盖
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.BACKEND_IMAGE }}
           tags: |
-            type=raw,value=gha-${{ github.run_number }}-${{ github.sha }}
+            type=sha,prefix=gha-${{ github.run_number }}-
             type=raw,value=latest
 
-      # 终极构建与推送
       - name: Build and push Backend Image
         uses: docker/build-push-action@v7
         with:
           context: ./web-demo/backend
           push: true
-          # 动态注入上面生成的多个 Tags
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ steps.meta-backend.outputs.tags }}
+          labels: ${{ steps.meta-backend.outputs.labels }}
+
+      # ------------------------------------------
+      # 🎯 制造前端镜像
+      # ------------------------------------------
+      - name: Extract Frontend metadata
+        id: meta-frontend # 【隔离ID】：专属前端的变量
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.FRONTEND_IMAGE }}
+          tags: |
+            type=sha,prefix=gha-${{ github.run_number }}-
+            type=raw,value=latest
+
+      - name: Build and push Frontend Image
+        uses: docker/build-push-action@v7
+        with:
+          context: ./web-demo/frontend
+          push: true
+          tags: ${{ steps.meta-frontend.outputs.tags }}
+          labels: ${{ steps.meta-frontend.outputs.labels }}
