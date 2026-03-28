@@ -45,9 +45,10 @@ jobs:
   # ==========================================
   build-and-push:
     name: Build & Push Docker Image
-    # 【架构师防线】：只有 test 任务成功，且触发事件是 push (合并到main)，才执行打包！
+    # 【防线】：只有 test 任务成功，才执行打包！
     needs: test
-    if: github.event_name == 'push'
+    # 【许可】：如果是代码推送，或者是手动点击按钮，都允许放行！
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     
     permissions:
