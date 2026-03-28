@@ -77,7 +77,7 @@ jobs:
 
       # 终极构建与推送
       - name: Build and push Backend Image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ./web-demo/backend
           push: true
