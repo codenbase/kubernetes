@@ -7,22 +7,80 @@ on:
     branches: [ "main" ]
   workflow_dispatch: 
 
+env:
+  REGISTRY: ghcr.io
+  # 动态生成你的镜像名前缀，比如 ghcr.io/codenbase/web-demo-backend
+  BACKEND_IMAGE: ghcr.io/${{ github.repository_owner }}/web-demo-backend
+
 jobs:
+  # ==========================================
+  # 阶段一：质检防御网 (Pull Request & Push)
+  # ==========================================
   test:
     name: Code Quality & Unit Tests
-    runs-on: ubuntu-latest 
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v5
+
       - name: Setup Go Environment
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: '1.25' 
+          go-version: '1.25'
+          # 【消灭警告】：精准告诉插件 go.sum 在哪里！
+          cache-dependency-path: web-demo/backend/go.sum
+
       - name: Run Go Vet
         run: |
           cd web-demo/backend
           go vet ./...
+
       - name: Run Unit Tests
         run: |
           cd web-demo/backend
           go test -v ./...
+
+  # ==========================================
+  # 阶段二：兵工厂制造与推送 (仅在合并到 main 时执行)
+  # ==========================================
+  build-and-push:
+    name: Build & Push Docker Image
+    # 【架构师防线】：只有 test 任务成功，且触发事件是 push (合并到main)，才执行打包！
+    needs: test
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v5
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # 【一镜多签魔法】：自动生成机器 Tag 和最新 Tag
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.BACKEND_IMAGE }}
+          tags: |
+            type=raw,value=gha-${{ github.run_number }}-${{ github.sha }}
+            type=raw,value=latest
+
+      # 终极构建与推送
+      - name: Build and push Backend Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./web-demo/backend
+          push: true
+          # 动态注入上面生成的多个 Tags
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
