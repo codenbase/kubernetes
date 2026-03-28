@@ -41,6 +41,8 @@ jobs:
           push: true
           # 自动打上 latest 标签
           tags: ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}:latest
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
 
       - name: 构建并推送 Frontend 镜像
         uses: docker/build-push-action@v5
@@ -48,3 +50,5 @@ jobs:
           context: web-demo/frontend
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:latest
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
