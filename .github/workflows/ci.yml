@@ -104,3 +104,61 @@ jobs:
           push: true
           tags: ${{ steps.meta-frontend.outputs.tags }}
           labels: ${{ steps.meta-frontend.outputs.labels }}
+
+  # ==========================================
+  # 阶段三：特权外交官 (GitOps 配置篡改)
+  # ==========================================
+  update-gitops-config:
+    name: Update GitOps Config Repo
+    # 【物理隔离防线】：必须等造弹药的任务成功结束，才启动这台纯净的虚拟机
+    needs: build-and-push
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    
+    steps:
+      # 1. 计算出刚刚打上的那个镜像短标签 (例如 gha-12-a1b2c3d)
+      - name: Generate Tag Name
+        id: vars
+        run: |
+          # 截取哈希前 7 位，拼接成我们在 metadata 插件里定义的相同格式
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          echo "IMAGE_TAG=gha-${{ github.run_number }}-${SHORT_SHA}" >> $GITHUB_ENV
+
+      # 2. 拔出 PAT 万能钥匙，跨库克隆配置仓库
+      - name: Checkout Config Repo
+        uses: actions/checkout@v5
+        with:
+          repository: akuku-ai/gitops-manifests  # 你的目标配置库
+          token: ${{ secrets.GITOPS_PAT }}       # 【核心！】使用存好的万能钥匙
+          path: gitops-config                    # 把代码克隆到这台虚拟机的 gitops-config 文件夹里
+
+      # 3. 使用 yq 神器精准篡改 YAML 里的 Tag
+      - name: Update Image Tags in values.yaml
+        run: |
+          cd gitops-config
+          
+          # 【注意路径】这里假设你的 values.yaml 放在 apps/web-demo/ 目录下
+          # 使用 ubuntu-latest 内置的 yq 工具，精准替换前后端的 tag 字段
+          yq -i '.backend.image.tag = stenv(IMAGE_TAG)' apps/web-demo/values.yaml
+          yq -i '.frontend.image.tag = stenv(IMAGE_TAG)' apps/web-demo/values.yaml
+          
+          echo "✅ 成功将 values.yaml 里的 tag 修改为: $IMAGE_TAG"
+
+      # 4. 提交并跨库推送到 akuku-ai/gitops-manifests
+      - name: Commit and Push Changes
+        run: |
+          cd gitops-config
+          # 伪装成一个无情的自动化机器人
+          git config user.name "GitOps Bot"
+          git config user.email "gitops-bot@akuku.ai"
+          
+          # 检查是否有文件被修改（防止因为重复点击导致报错）
+          if git diff --quiet; then
+            echo "版本号未发生变化，无需提交。"
+          else
+            git add .
+            # [skip ci] 是大厂规范，告诉目标仓库：这只是一次配置修改，别触发你在那边的流水线！
+            git commit -m "chore(web-demo): auto-update image tags to ${{ env.IMAGE_TAG }} [skip ci]"
+            git push
+            echo "🚀 成功将最新版本推送到配置库！"
+          fi
