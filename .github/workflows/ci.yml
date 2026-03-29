@@ -136,13 +136,13 @@ jobs:
       - name: Update Image Tags in values.yaml
         run: |
           cd gitops-config
+          TARGET_FILE="apps/web-demo/values.yaml"
+
+          # 双引号包裹表达式，利用 shell 直接注入变量
+          yq -i ".backend.image.tag = \"${IMAGE_TAG}\"" $TARGET_FILE
+          yq -i ".frontend.image.tag = \"${IMAGE_TAG}\"" $TARGET_FILE
           
-          # 【注意路径】这里假设你的 values.yaml 放在 apps/web-demo/ 目录下
-          # 使用 ubuntu-latest 内置的 yq 工具，精准替换前后端的 tag 字段
-          yq -i '.backend.image.tag = stenv(IMAGE_TAG)' apps/web-demo/values.yaml
-          yq -i '.frontend.image.tag = stenv(IMAGE_TAG)' apps/web-demo/values.yaml
-          
-          echo "✅ 成功将 values.yaml 里的 tag 修改为: $IMAGE_TAG"
+          echo "✅ 成功将 $TARGET_FILE 里的 tag 修改为: ${{ env.IMAGE_TAG }}"
 
       # 4. 提交并跨库推送到 akuku-ai/gitops-manifests
       - name: Commit and Push Changes
